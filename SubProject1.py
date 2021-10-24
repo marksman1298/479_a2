@@ -61,6 +61,22 @@ def sortAndRemoveDuplicates(articles: List) -> List:  #case insensitive?
     # articles = sorted(articles)   
     return sorted(list(set([termDocId for termDocId in articles])))
 
-    
+def postingsList(articles: List) -> Dict:
+    #Loop through each tuple
+    postingList = []
+    i = 0
+    while(i < (len(articles)-1)):
+        token = articles[i][0]
+        ids = [articles[i][1]]
+        while (i < (len(articles)-1)) and (articles[i][0] == articles[i+1][0]):
+            ids.append(articles[i+1][1]) 
+            i += 1
+            
+        i += 1
+        postingList.append((token, ids))
 
-print(sortAndRemoveDuplicates(splitIntoArticles()))
+    with open("test2.txt", "w") as outfile:
+        json.dump(postingList, outfile)
+    return postingList
+articles = sortAndRemoveDuplicates(splitIntoArticles())
+postingsList(articles)
