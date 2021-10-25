@@ -3,6 +3,7 @@ from nltk import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
 from typing import List, Dict
+from tabulate import tabulate
 
 def splitIntoArticles() -> List[str]: #read all files in directory, put everything into one string, split into list of articles 
     data = ""
@@ -23,39 +24,18 @@ def splitIntoArticles() -> List[str]: #read all files in directory, put everythi
 def makeDict(listOfArticles: List) -> List: #want to get all newids of articles, then add them to a list, then combine both lists into dictionary with key new id : value article
     articles = []
     
-    # specificArticle = input("Enter desired articles separated by space: ")
-    # listArticles = specificArticle.split(" ")
-    
     for i in range(len(listOfArticles)): 
-    # print(word_tokenize(listOfArticles[0]))
         foundNewID = re.search('NEWID="([0-9]+)"', listOfArticles[i])
         if foundNewID is not None:
             newId = re.search('[0-9]+', foundNewID.group(0)) #not between text tags, might need to add that later.
             if newId is not None:
                 articles= documentTermDocIdPairs(word_tokenize(listOfArticles[i]), newId.group(0), articles)
-                # ids.append(newId.group(0))
-    # articles = {ids[i]: listOfArticles[i] for i in range(len(ids))}
     return articles
-    # if not len(listArticles) == 0:
-    #     tableArticles = {} 
-    #     for articleId in listArticles:
-    #         try:
-    #             tableArticles[articleId] = articles[articleId]
-    #         except Exception as e:
-    #             print("Not a valid key", e)
-    #             return extractText(articles)
-    #     return extractText(tableArticles)
-       
-    # return extractText(articles)   
-
-def documentTermDocIDpairs(tokenizedDocument: List, ID: str) -> Dict: #makes dictionary for each document with key being the token and id the value, 
-    termDocId = {tokens: ID for tokens in tokenizedDocument}
-    return termDocId
+   
     
 def documentTermDocIdPairs(tokenizedDocument: List, ID: str, articles: List) -> List: #makes list of tuples for each document (each document is it's own list)
     for tokens in tokenizedDocument:
         articles.append((tokens, ID))
-    # articles.append(tuple((tokens, ID) for tokens in tokenizedDocument))
     return articles
 
 def sortAndRemoveDuplicates(articles: List) -> List:  #case insensitive? 
@@ -102,12 +82,25 @@ def distinctLossyDictionaryCompression(postingsList: Dict):
     lowerCase = caseFolding(noNumbers)
     stopWords30, stopWords150 = removeStopWords(lowerCase)
     porterStemmer = stemming(stopWords150)
-    print(unfiltered)
-    print(len(noNumbers))
-    print(len(lowerCase))
-    print(len(stopWords30))
-    print(len(stopWords150))
-    print(len(porterStemmer))
+    printTable(unfiltered, len(noNumbers), len(lowerCase), len(stopWords30), len(stopWords150), len(porterStemmer) )
+    
+
+def printTable(unfiltered: int, number: int, case: int, stop30: int, stop150: int, stem: int):
+    header = ["operations", "distinct_number", "delta %", "total %"] #, "nonpositional_number", "delta %", "total %"]
+    data = []
+    #unfiltered row
+    data.append(["unfiltered", unfiltered])
+    #remove numbers
+    data.append(["no numbers", number, (1-(number/unfiltered))*100, (1-(number/unfiltered))*100])
+    #case insensitive
+    data.append(["case folding", case, (1-(case/number))*100, (1-(case/unfiltered))*100])
+    #30 stop words
+    data.append(["30 stop words", stop30, (1-(stop30/case))*100, (1-(stop30/unfiltered))*100])
+    #150 stop words
+    data.append(["150 stop words", stop150, (1-(stop150/stop30))*100, (1-(stop150/unfiltered))*100])
+    #150 stemming
+    data.append(["stemming", stem, (1-(stem/stop150))*100, (1-(stem/unfiltered))*100])
+    print(tabulate(data, headers=header, tablefmt="grid"))
 
 def caseFolding(noNumbers: Dict) -> Dict:
     lowerCase = {}
@@ -146,6 +139,6 @@ def stemming(stopWords150: Dict)-> Dict: #what happens if two words stem to same
 articles = sortAndRemoveDuplicates(splitIntoArticles())
 articles = postingsList(articles)
 distinctLossyDictionaryCompression(articles)
-# print(queryProcessor(articles))
+
 
 
