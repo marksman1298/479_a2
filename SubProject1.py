@@ -4,6 +4,7 @@ from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
 from typing import List, Dict
 from tabulate import tabulate
+from datetime import datetime
 
 def splitIntoArticles() -> List[str]: #read all files in directory, put everything into one string, split into list of articles 
     data = ""
@@ -20,7 +21,7 @@ def splitIntoArticles() -> List[str]: #read all files in directory, put everythi
                 data += f.read()
     return makeList(data.split("</REUTERS>"))
 
-def makeList(listOfArticles: List) -> List: #want to get all newids of articles, then add them to a list, then combine both lists into dictionary with key new id : value article
+def makeList(listOfArticles: List) -> List: 
     articles = []
     for i in range(len(listOfArticles)): 
         foundNewID = re.search('NEWID="([0-9]+)"', listOfArticles[i])
@@ -37,12 +38,10 @@ def documentTermDocIdPairs(tokenizedDocument: List, ID: str, articles: List) -> 
     return articles
 
 def sortAndRemoveDuplicates(articles: List) -> List:    
-    return sorted(list(set([termDocId for termDocId in articles])))
+    return sorted(list(set(articles)))
 
 #sort list of docs in increasing order?
-def postingsList(articles: List) -> List:
-    #Loop through each tuple
-    # postingList = []
+def postingsList(articles: List) -> Dict:
     postingList = {}
     i = 0
     while(i < (len(articles)-1)):
@@ -51,21 +50,28 @@ def postingsList(articles: List) -> List:
         while (i < (len(articles)-1)) and (articles[i][0] == articles[i+1][0]):
             ids.append(articles[i+1][1]) 
             i += 1
-            
         i += 1
-        # postingList.append((token, ids))
         postingList[token] = ids
-    # with open("test2.txt", "w") as outfile:
-    #     json.dump(postingList, outfile)
+    
+    for terms, postings in postingList.items():
+        postings = postings.sort(key=int)
+    # with open("postingList.txt", "w") as outfile:
+    #      json.dump(postingList, outfile)
     return postingList
 
 #Single word query
-def queryProcessor(postingsList: List) -> List:
+def queryProcessor(postingsList: Dict):
     query = input("Enter single word query: ")
-    for term in postingsList:
-        if term[0] == query:
-            return term
-    return []
+
+    # for term in postingsList:
+    #     if term == query:
+    #         with open("query2.txt", "w") as outfile:
+    #             json.dump((term, postingsList[term]), outfile)
+    #         return (term, postingsList[term])
+    # postingsList.get(query, [])
+    with open("query2.txt", "w") as outfile:
+        json.dump((query, postingsList.get(query, [])), outfile)
+    return (query,postingsList.get(query, []))
 
 #Subproject 3
 #1 Implement the lossy dictionary compression techiniques of table 5.1
@@ -76,14 +82,18 @@ def distinctLossyDictionaryCompression(postingsDict: Dict, postingsList: List):
     noNumbers = []
     noNumbersDistinct = {}
     for term in postingsDict:
-        if not term.isdecimal():
+        if not term.isdecimal():#bool(re.match(r'.*[0-9].*', term)):#
             noNumbersDistinct[term] = postingsDict[term]
     for term in postingsList:
-        if not term[0].isdecimal():
+        if not term[0].isdecimal(): #bool(re.match(r'.*[0-9].*', term[0])):
             noNumbers.append(term)
     lowerCaseDistinct, lowerCase = caseFolding(noNumbersDistinct, noNumbers)
     stopWords30Distinct, stopWords150Distinct, stopWords30, stopWords150 = removeStopWords(lowerCaseDistinct, lowerCase)
     porterStemmerDistinct, porterStemmer = stemming(stopWords150Distinct, stopWords150)
+    with open("lossyCompressionDistinct2.txt", "w") as outfile:
+        json.dump(porterStemmerDistinct, outfile)
+    # with open("lossyCompression.txt", "w") as outfile:
+    #     json.dump(porterStemmer, outfile)
     printTable(unfilteredDistinct, len(noNumbersDistinct), len(lowerCaseDistinct), len(stopWords30Distinct), len(stopWords150Distinct), len(porterStemmerDistinct),
     unfiltered, len(noNumbers), len(lowerCase), len(stopWords30), len(stopWords150), len(porterStemmer))
     
@@ -93,11 +103,13 @@ def caseFolding(noNumbersDistinct: Dict, noNumbers: List):
     lowerCase = []
     for term in noNumbersDistinct:
         if bool(re.match(r'.*[A-Z].*', term)): #check if term contains any uppercase characters
-            if term.lower() in noNumbersDistinct:
-                lowerCaseDistinct[term.lower()] = list(set(noNumbersDistinct[term] + noNumbersDistinct[term.lower()]))
+            if term.lower() in lowerCaseDistinct:
+                lowerCaseDistinct[term.lower()] = list(set(lowerCaseDistinct[term.lower()] + noNumbersDistinct[term])).sort(key=int)
             else:
                 lowerCaseDistinct[term.lower()] = noNumbersDistinct[term]
-        else:
+        elif term in lowerCaseDistinct: #adding lower case from original list that now exists cause send uppercase to lower and added it to new list
+            lowerCaseDistinct[term] = list(set(lowerCaseDistinct[term] + noNumbersDistinct[term])).sort(key=int)
+        elif term not in lowerCaseDistinct:
             lowerCaseDistinct[term] = noNumbersDistinct[term]
     for term in noNumbers:
         if bool(re.match(r'.*[A-Z].*', term[0])):
@@ -133,9 +145,10 @@ def stemming(stopWords150Distinct: Dict, stopWords150: List)-> Dict: #what happe
     for term in stopWords150Distinct:
         stemmedTerm = ps.stem(term)
         if stemmedTerm in porterStemmerDistinct:
-            porterStemmerDistinct[stemmedTerm] = list(set(porterStemmerDistinct[stemmedTerm] + stopWords150Distinct[term]))
+            porterStemmerDistinct[stemmedTerm] = list(set(porterStemmerDistinct[stemmedTerm] + stopWords150Distinct[term])).sort(key=int)     
         else:
             porterStemmerDistinct[stemmedTerm] = stopWords150Distinct[term]
+
     for term in stopWords150:
         stemmedTerm = ps.stem(term[0])
         stemTuple = (stemmedTerm, term[1])
@@ -161,11 +174,14 @@ def printTable(d_unfiltered: int, d_number: int, d_case: int, d_stop30: int, d_s
     #150 stemming
     data.append(["stemming", d_stem, int((1-(d_stem/d_stop150))*100), int((1-(d_stem/d_unfiltered))*100), stem, int((1-(stem/stop150))*100), int((1-(stem/unfiltered))*100)])
     print(tabulate(data, headers=header, tablefmt="grid"))
-    with open("compressionTable.txt", "w") as outfile:
+    with open("compressionTable2.txt", "w") as outfile:
         json.dump(tabulate(data, headers=header, tablefmt="grid"), outfile)
 
 
+starttime = datetime.now()
 articles = sortAndRemoveDuplicates(splitIntoArticles())
-articles2 = postingsList(articles)
-distinctLossyDictionaryCompression(articles2, articles)
 
+articles2 = postingsList(articles)
+print(queryProcessor(articles2))
+# distinctLossyDictionaryCompression(articles2, articles)
+# print(datetime.now()- starttime)
