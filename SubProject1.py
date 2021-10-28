@@ -1,5 +1,5 @@
-import os, re, json
-from nltk import stem, word_tokenize
+import os, re, json, string
+from nltk import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
 from typing import List, Dict
@@ -28,13 +28,24 @@ def makeList(listOfArticles: List) -> List:
         if foundNewID is not None:
             newId = re.search('[0-9]+', foundNewID.group(0)) #gets the id of the article
             if newId is not None:
-                articles= documentTermDocIdPairs(word_tokenize(listOfArticles[i]), newId.group(0), articles) #tokenizes the articles one at a time 
+                # listOfArticles[i] = extractBody(listOfArticles[i])
+                articles= documentTermDocIdPairs(word_tokenize(extractBody(listOfArticles[i])), newId.group(0), articles) #tokenizes the articles one at a time 
     return articles
    
-    
+def extractBody(document: str) -> str: #remove everything that isn't between the body tags, if there are no text tags present return empty string 
+    startText = document.find("<BODY>")
+    endText = document.find("</BODY>")
+    if startText != -1 and endText != -1:
+        document = document[startText:endText+7]
+        return document
+    return ""
+
 def documentTermDocIdPairs(tokenizedDocument: List, ID: str, articles: List) -> List: #makes list of tuples (term, docID) 
+    specialChar = string.punctuation
+    exp = "[{schar}]".format(schar = specialChar)
     for tokens in tokenizedDocument:
-        articles.append((tokens, ID))
+        if not bool(re.match(exp, tokens)):
+            articles.append((tokens, ID))
     return articles
 
 def sortAndRemoveDuplicates(articles: List) -> List: #removes duplicate tuples ie: ('a', 1), ('a', 1) -> ('a', 1) and sorts the tuples
@@ -56,7 +67,7 @@ def postingsList(articles: List) -> Dict: # creates the dictionary where the key
     for terms, postings in postingList.items(): #sort the docIDs of each term in increasing order
         postings = postings.sort(key=int)
     with open("term-docID.txt", "w") as outfile:
-         json.dump(postingList, outfile)
+        json.dump(postingList, outfile)
     return postingList
 
 #Subproject 2
@@ -65,7 +76,7 @@ def queryProcessor(postingsList: Dict, afterCompression = False):
     
     while True:
         query = input("Enter single word query: ")
-        if query == "exit":
+        if not query:
             break
         if afterCompression:#checks after the lossy compression so need to also alter the query to find any results
             ps = PorterStemmer()
@@ -90,7 +101,7 @@ def distinctLossyDictionaryCompression(postingsDict: Dict) -> Dict:
     noNumbersTerms = {}
     noNumbersPostings = 0
     for term in postingsDict:
-        if not term.isdecimal():#bool(re.match(r'.*[0-9].*', term)): #decided to remove terms that were entirely digits, so terms that have some digits and some letters are accepted
+        if not bool(re.match(r'.*[0-9].*', term)): # #decided to remove terms that were entirely digits, so terms that have some digits and some letters are accepted
             noNumbersTerms[term] = postingsDict[term]
             noNumbersPostings += len(noNumbersTerms[term])
     lowerCaseTerms, lowerCasePostings = caseFolding(noNumbersTerms) 
@@ -158,7 +169,7 @@ def stemming(stopWords150Terms: Dict)-> Dict: #what happens if two words stem to
 
 def printTable(d_unfiltered: int, d_number: int, d_case: int, d_stop30: int, d_stop150: int, d_stem: int, 
                unfiltered: int, number: int, case: int, stop30: int, stop150: int, stem: int): #creates the table
-    header = ["operations", "distinct_number", "delta %", "total %", "number", "delta %", "total %"] 
+    header = ["operations", "terms", "delta %", "total %", "posting size", "delta %", "total %"] 
     data = []
     #unfiltered row
     data.append(["unfiltered", d_unfiltered, "", "", unfiltered])
@@ -173,15 +184,13 @@ def printTable(d_unfiltered: int, d_number: int, d_case: int, d_stop30: int, d_s
     #150 stemming
     data.append(["stemming", d_stem, int((1-(d_stem/d_stop150))*100), int((1-(d_stem/d_unfiltered))*100), stem, int((1-(stem/stop150))*100), int((1-(stem/unfiltered))*100)])
     print(tabulate(data, headers=header, tablefmt="grid"))
-    with open("compressionTable2.txt", "w") as outfile:
+    with open("compressionTable.txt", "w") as outfile:
         json.dump(tabulate(data, headers=header, tablefmt="grid"), outfile)
 
 
 starttime = datetime.now()
 articles = sortAndRemoveDuplicates(splitIntoArticles())
-# print(len(articles))
 articles2 = postingsList(articles)
-print(len(articles2))
 print(queryProcessor(articles2))
 final = distinctLossyDictionaryCompression(articles2)
 print(queryProcessor(final, True))
